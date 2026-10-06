@@ -152,6 +152,7 @@
     .shadebtn.sub { background: #fff; color: #1e3a8a; }
     @media print { .shade-fit .shadebtn { display: none !important; } }
 
+    .shade-out { color: #b91c1c; font-weight: 700; font-size: 0.85rem; line-height: 1.5; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
     .shade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
     details.shade .hint { text-align: left; font-size: 0.72rem; }
     details.shade select, details.shade input[type=number] { font-size: 0.9rem; padding: 8px; }
@@ -1285,13 +1286,15 @@
       const res = computeShade({ t0: t0, t1: t1, S: S, floors: fl, nvec: nvec, lat: lat, planeH: planeH, limits: { near: tt[0], far: tt[1] } });
       const top = fl1 + floors.length * floorH;
       const zkey = document.getElementById('zoning').value, kind = SHADE_PRESET[zkey] ? SHADE_PRESET[zkey].kind : null;
-      let target = '';
+      let target = '', targetOut = false;
       if (kind === 'low') target = (top > 7 || floors.length >= 3) ? '対象建築物の規模（軒高7m超または地上3階建て以上）に当たる見込みです。' : '軒高7m以下かつ2階建て以下の見込みで、規模要件では対象外になる可能性があります。';
       else if (kind === 'high') target = top > 10 ? '対象建築物の規模（高さ10m超）に当たる見込みです。' : '高さ10m以下の見込みで、規模要件では対象外になる可能性があります。';
+      if (kind) targetOut = /対象外/.test(target);
       const ok = res.maxNear <= tt[0] + 1e-6 && res.maxFar <= tt[1] + 1e-6;
       const f1 = function (n) { return (Math.round(n * 10) / 10).toFixed(1); };
       let h = '<div class="plan shadecard"><div class="pt">日影規制の検討（冬至日 真太陽時' + t0 + '〜' + t1 + '時）</div>';
       h += '<div class="shade-sum ' + (ok ? 'ok' : 'ng') + '">' + (ok ? (fitInfo ? '適合（日影を満たすよう調整した形）' : '適合（今のボリュームで規制時間内）') : '超過あり（今のボリュームでは規制時間を超えます）') + '</div>';
+      if (targetOut) h += '<div class="shade-out">⚠ ' + target + '（軒高・高さ・階数を確認してください）</div>';
       h += shadeSvg(res, S, floors, nvec);
       h += '<div class="shade-legend"><span><i style="background:#fcd34d"></i>日影（色が濃いほど長い）</span><span><i style="background:#dc2626"></i>規制時間超過</span><span><i style="border:1px dashed #64748b;background:#fff"></i>5m・10mライン</span><span><i style="border:2px solid #b91c1c;background:#fff"></i>規制時間の等時間線</span></div>';
       h += '<table class="ftable shadetbl"><tbody>';
@@ -1306,7 +1309,7 @@
         let li = fitInfo.areas ? (fitInfo.areas.length ? fitInfo.areas.map(function (a) { return a.floor + 'F：' + f1(a.before) + '→' + f1(a.after) + '㎡'; }).join('、') : '（調整なし）') : fitInfo.cuts.length ? fitInfo.cuts.map(function (c) { return c.removed ? c.floor + 'F：なし' : c.floor + 'F：北側を ' + f1(c.cut) + 'm 後退'; }).join('、') : '（調整なし）';
         h += '<div class="shade-fit"><div class="shade-note" style="margin:0 0 6px">調整内容：' + li + '<br>延床面積 ' + f1(fitInfo.before) + '㎡ → ' + f1(fitInfo.after) + '㎡（' + f1(fitInfo.after - fitInfo.before) + '㎡）</div><button type="button" class="shadebtn sub" onclick="shadeFitReset()">最大ボリュームに戻す</button></div>';
       }
-      h += '<div class="shade-note">条件：測定面 GL＋' + f1(planeH) + 'm' + (diff >= 1 ? '（隣地との高低差 ' + f1(diff) + 'm の補正後）' : '') + '／北緯 ' + lat + '°／規制 ' + tt[0] + 'h−' + tt[1] + 'h。道路などに接する辺は、幅の1/2（幅10m超は反対側から5m）だけ外側を敷地境界線とみなしています。' + (target ? '<br>' + target : '') + (fitInfo ? (fitInfo.areas ? '<br>1m角のブロックを単位に、日影が規制時間内になるよう自動で削った形です（図面の線は、元の敷地・斜線の形に合わせて整えています）。' : '<br>北側を階ごとに後退させて、日影が規制時間内になるようにした形です。') : '<br>建築可能なボリュームを最大に建てた場合の確認です。')+'実際の申請では、対象区域・規制時間・測定面の高さを自治体の条例で確認し、日影図で検証してください。</div>';
+      h += '<div class="shade-note">条件：測定面 GL＋' + f1(planeH) + 'm' + (diff >= 1 ? '（隣地との高低差 ' + f1(diff) + 'm の補正後）' : '') + '／北緯 ' + lat + '°／規制 ' + tt[0] + 'h−' + tt[1] + 'h。道路などに接する辺は、幅の1/2（幅10m超は反対側から5m）だけ外側を敷地境界線とみなしています。' + (target && !targetOut ? '<br>' + target : '') + (fitInfo ? (fitInfo.areas ? '<br>1m角のブロックを単位に、日影が規制時間内になるよう自動で削った形です（図面の線は、元の敷地・斜線の形に合わせて整えています）。' : '<br>北側を階ごとに後退させて、日影が規制時間内になるようにした形です。') : '<br>建築可能なボリュームを最大に建てた場合の確認です。')+'実際の申請では、対象区域・規制時間・測定面の高さを自治体の条例で確認し、日影図で検証してください。</div>';
       h += '</div>';
       box.innerHTML = h;
       return { ok: ok, maxNear: res.maxNear, maxFar: res.maxFar };
