@@ -110,7 +110,8 @@
     .deg-row input { width: 64px; padding: 4px 6px; font-size: 0.85rem; }
     input[type=text] { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
     .view3d-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 0.72rem; color: #64748b; }
-    .stairtog { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #1e3a8a; font-weight: 600; }
+    .stairtog input { width: auto; margin: 0; }
+    .stairtog { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #1e3a8a; font-weight: 600; }
     .view3d-bar button { padding: 6px 10px; font-size: 0.78rem; border: 1px solid #1e3a8a; background: #fff; color: #1e3a8a; border-radius: 8px; cursor: pointer; }
     .pdfbtn { width: 100%; padding: 10px; font-size: 0.9rem; background: #fff; color: #1e3a8a; border: 1px solid #1e3a8a; border-radius: 8px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     #printHeader, #printFooter, #print3d { display: none; }
@@ -2224,7 +2225,25 @@
           });
         });
       } else {
-        buildEnvelope(fp, H).forEach(buildRegion);
+        // 容積率でぎりぎりまで削った階（奥側をカット）がある場合は、その階の高さの帯ごとに奥の限界を変えて描く
+        const zl = currentFloors.map(function (f) { return Math.max.apply(null, f.rects.map(function (r) { return r.z1; })); });
+        const fc = zl.findIndex(function (v) { return v < fp.z1 - 0.05; });
+        if (fc < 0) buildEnvelope(fp, H).forEach(buildRegion);
+        else {
+          const V = function (x, y, z) { return new THREE.Vector3(x, y, z); };
+          const loOf = function (i) { return i === 0 ? 0 : fl1 + i * floorH; };
+          const addBand = function (extra) {
+            buildEnvelope(fp, H).forEach(function (r) {
+              r.planes = r.planes.concat(extra.map(function (e) { return { n: e.n, p: e.p, color: r.color }; }));
+              buildRegion(r);
+            });
+          };
+          addBand([{ n: V(0, -1, 0), p: V(0, loOf(fc), 0) }]);
+          for (let i = fc; i < currentFloors.length; i++) {
+            const top = i === currentFloors.length - 1 ? H + 1 : fl1 + (i + 1) * floorH;
+            addBand([{ n: V(0, 1, 0), p: V(0, loOf(i), 0) }, { n: V(0, -1, 0), p: V(0, top, 0) }, { n: V(0, 0, -1), p: V(0, 0, zl[i]) }]);
+          }
+        }
       }
 
       // 各階の上端高さでの建築可能範囲の輪郭線（斜線で削られる位置の目安）
