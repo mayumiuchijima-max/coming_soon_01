@@ -110,6 +110,7 @@
     .deg-row input { width: 64px; padding: 4px 6px; font-size: 0.85rem; }
     input[type=text] { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
     .view3d-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 0.72rem; color: #64748b; }
+    .stairtog { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #1e3a8a; font-weight: 600; }
     .view3d-bar button { padding: 6px 10px; font-size: 0.78rem; border: 1px solid #1e3a8a; background: #fff; color: #1e3a8a; border-radius: 8px; cursor: pointer; }
     .pdfbtn { width: 100%; padding: 10px; font-size: 0.9rem; background: #fff; color: #1e3a8a; border: 1px solid #1e3a8a; border-radius: 8px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     #printHeader, #printFooter, #print3d { display: none; }
@@ -414,6 +415,7 @@
     <div class="view3d-bar">
       <button type="button" onclick="setView(VIEW0)">初期の向き</button>
       <button type="button" onclick="setView({ yaw: viewState.yaw, pitch: 1.5, dist: 70 })">真上から</button>
+      <label class="stairtog"><input type="checkbox" id="stairMode"> 斜線部を階段状に表示</label>
       <span>ドラッグで回転・ホイール／ピンチで拡大縮小。PDFには今の向きの3Dが入ります。</span>
     </div>
     <p class="note">
@@ -2129,6 +2131,8 @@
       return compassGroup;
     }
 
+    function stairOn() { const e = document.getElementById('stairMode'); return !!(e && e.checked); }
+    let lastUpd3D = null;
     function update3D(siteW, siteD, fp, setback, roadWidth, slope, fl1, floorH, floorCount, roadLevel, nvec, fitted) {
       if (!scene) init3D();
       if (group) scene.remove(group);
@@ -2208,8 +2212,8 @@
       group.add(compass3D);
 
       const H = fl1 + floorCount * floorH + 2.0;
-      if (fitted) {
-        // 日影のために調整した形：各階を長方形の箱で積む
+      if (fitted || stairOn()) {
+        // 日影で調整した形／階段状表示：各階を長方形の箱で積む
         currentFloors.forEach(function (f) {
           const lo = f.floor === 1 ? 0 : fl1 + (f.floor - 1) * floorH, hi = fl1 + f.floor * floorH;
           f.rects.forEach(function (r) {
@@ -2558,7 +2562,8 @@
         
         currentFloors = floors.map(function (f) { return { floor: f.floor, rects: f.rects }; });
         try {
-          update3D(siteW, siteD, fpFinal, setback, road, slope, fl1, floorH, floors.length, roadLevel, nvec, !!fitInfo);
+          lastUpd3D = function () { update3D(siteW, siteD, fpFinal, setback, road, slope, fl1, floorH, floors.length, roadLevel, nvec, !!fitInfo); };
+          lastUpd3D();
           snap3D();
         } catch (err) {
           console.error(err);
@@ -2576,6 +2581,7 @@
     function shadeFitReset() { shadeFitPending = false; calculate(); }
     document.getElementById('zoning').addEventListener('change', ShadeLib.shadePreset);
     ShadeLib.shadeCityInit();
+    document.getElementById('stairMode').addEventListener('change', function () { if (lastUpd3D) { try { lastUpd3D(); snap3D(); } catch (e) { console.error(e); } } });
       window.__appLoaded = true;
   </script>
 </body>
