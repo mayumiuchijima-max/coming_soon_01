@@ -109,13 +109,15 @@
     .deg-row { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 0.78rem; margin: 4px 0 0; }
     .deg-row input { width: 64px; padding: 4px 6px; font-size: 0.85rem; }
     input[type=text] { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+    .view3d-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 0.72rem; color: #64748b; }
+    .view3d-bar button { padding: 6px 10px; font-size: 0.78rem; border: 1px solid #1e3a8a; background: #fff; color: #1e3a8a; border-radius: 8px; cursor: pointer; }
     .pdfbtn { width: 100%; padding: 10px; font-size: 0.9rem; background: #fff; color: #1e3a8a; border: 1px solid #1e3a8a; border-radius: 8px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     #printHeader, #printFooter, #print3d { display: none; }
     @media print {
       @page { size: A4; margin: 12mm 12mm 20mm; @bottom-center { content: "株式会社スカイリブ環境計画"; font-size: 9pt; color: #475569; font-family: sans-serif; } }
       body { background: #fff; padding: 0; max-width: none; }
       body > *:not(#printHeader):not(#printFooter):not(#result):not(script) { display: none !important; }
-      .pdfbtn, #canvas-container canvas { display: none !important; }
+      .pdfbtn, .view3d-bar, #canvas-container canvas { display: none !important; }
       #printHeader { display: block; margin-bottom: 8px; }
       .ph-title { font-size: 1.3rem; font-weight: bold; border-bottom: 2px solid #1e3a8a; padding-bottom: 4px; margin-bottom: 6px; color: #1e3a8a; }
       .ph-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
@@ -362,6 +364,11 @@
       <div class="result-item">隣地斜線： <strong id="adjRuleText"></strong></div>
     </details>
     <div id="canvas-container"></div>
+    <div class="view3d-bar">
+      <button type="button" onclick="setView(VIEW0)">初期の向き</button>
+      <button type="button" onclick="setView({ yaw: viewState.yaw, pitch: 1.5, dist: 70 })">真上から</button>
+      <span>ドラッグで回転・ホイール／ピンチで拡大縮小。PDFには今の向きの3Dが入ります。</span>
+    </div>
     <p class="note">
       ※簡易版です。<br>
       ・建ぺい率は「法定」の数字に、角地+10%・防火+10%（法定80%で防火地域の耐火なら100%）をツールが加えます。角地は特定行政庁の指定が必要なので、必要に応じて選択で調整してください。<br>
@@ -738,6 +745,62 @@
       });
     }
 
+    // 3Dの視点：左右にドラッグ＝回転、上下にドラッグ＝見下ろす角度、ホイール／ピンチ＝拡大縮小
+    const VIEW0 = { yaw: 0, pitch: Math.atan2(33, 47), dist: Math.hypot(33, 47) };
+    let viewState = { yaw: VIEW0.yaw, pitch: VIEW0.pitch, dist: VIEW0.dist };
+    const CAM_TARGET = { x: 0, y: 5, z: 8 };
+    function applyCamera() {
+      const v = viewState;
+      camera.position.set(CAM_TARGET.x, CAM_TARGET.y + v.dist * Math.sin(v.pitch), CAM_TARGET.z + v.dist * Math.cos(v.pitch));
+      camera.lookAt(CAM_TARGET.x, CAM_TARGET.y, CAM_TARGET.z);
+      if (group) group.rotation.y = v.yaw;
+    }
+    function setView(v) {
+      viewState = { yaw: v.yaw, pitch: v.pitch, dist: v.dist };
+      applyCamera();
+      if (renderer && scene) snap3D();
+    }
+    function initViewControls(el) {
+      el.style.touchAction = 'none';
+      el.style.cursor = 'grab';
+      const pts = new Map();
+      let pinch0 = null;
+      el.addEventListener('pointerdown', function (ev) {
+        el.setPointerCapture(ev.pointerId);
+        pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (pts.size === 2) { const a = [...pts.values()]; pinch0 = { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y), dist: viewState.dist }; }
+        el.style.cursor = 'grabbing';
+      });
+      el.addEventListener('pointermove', function (ev) {
+        if (!pts.has(ev.pointerId)) return;
+        const prev = pts.get(ev.pointerId);
+        pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (pts.size >= 2 && pinch0) {
+          const a = [...pts.values()];
+          const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+          if (d > 0) viewState.dist = Math.min(160, Math.max(12, pinch0.dist * pinch0.d / d));
+        } else {
+          viewState.yaw += (ev.clientX - prev.x) * 0.008;
+          viewState.pitch = Math.min(1.5, Math.max(0.05, viewState.pitch + (ev.clientY - prev.y) * 0.005));
+        }
+        applyCamera();
+      });
+      const up = function (ev) {
+        pts.delete(ev.pointerId); pinch0 = null;
+        el.style.cursor = 'grab';
+        if (!pts.size) snap3D();
+      };
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('wheel', function (ev) {
+        ev.preventDefault();
+        viewState.dist = Math.min(160, Math.max(12, viewState.dist * (1 + ev.deltaY * 0.001)));
+        applyCamera();
+        clearTimeout(initViewControls.t);
+        initViewControls.t = setTimeout(snap3D, 300);
+      }, { passive: false });
+    }
+
     function init3D() {
       const container = document.getElementById('canvas-container');
       container.innerHTML = '';
@@ -746,13 +809,13 @@
       
       camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
       // カメラ視点：反転を防ぐため中央やや上部から見下ろす視点に微修正
-      camera.position.set(0, 38, 55);
-      camera.lookAt(0, 5, 8);
+      applyCamera();
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.localClippingEnabled = true;
       container.appendChild(renderer.domElement);
+      initViewControls(renderer.domElement);
       scene.add(new THREE.AmbientLight(0xffffff, 0.7));
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
       dirLight.position.set(20, 30, 25);
@@ -1109,6 +1172,7 @@
       currentRoadLevel = roadLevel;
 
       group = new THREE.Group();
+      group.rotation.y = viewState.yaw;
       // 図面の座標は「左=-x、奥=+z」（左手系）。three.js は右手系なので x を反転して鏡像にならないようにする
       group.scale.set(-1, 1, 1);
 
@@ -1202,8 +1266,6 @@
         (function animate() {
           requestAnimationFrame(animate);
           if (group) {
-            // ゆっくり回転させるアニメーション
-            group.rotation.y += 0.003;
             updateClipPlanes();
           }
           renderer.render(scene, camera);
