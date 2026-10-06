@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>簡易ボリューム検討ツール</title>
+  <title>簡易ボリューム検討ツール（整形地版）</title>
   <style>
     body { font-family: sans-serif; max-width: 680px; margin: 20px auto; padding: 16px; background: #f5f5f5; color: #333; }
     h1 { font-size: 1.3rem; margin-bottom: 16px; }
@@ -128,10 +128,15 @@
       #canvas-container { height: 95mm !important; background: none; break-inside: avoid; }
       .plan, .tile, table.ftable tr { break-inside: avoid; }
     }
+    h1 .ver { display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 0.7rem; font-weight: 600; color: #1e3a8a; background: #dbeafe; border-radius: 999px; vertical-align: middle; }
+    .byline { margin: -6px 0 10px; font-size: 0.72rem; letter-spacing: 0.08em; color: #64748b; }
+    .sitefoot { margin: 18px 0 8px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.72rem; color: #94a3b8; }
+    @media print { .byline, .sitefoot { display: none !important; } }
   </style>
 </head>
 <body>
-  <h1>簡易ボリューム検討ツール</h1>
+  <h1>簡易ボリューム検討ツール<span class="ver">整形地版</span></h1>
+  <div class="byline">株式会社スカイリブ環境計画</div>
 
   <div class="form-group">
     <label>物件名 / 所在地（PDFに印字されます）</label>
@@ -382,6 +387,7 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <div class="sitefoot">株式会社スカイリブ環境計画　／　簡易ボリューム検討ツール</div>
   <script>
     const zoningData = {
       "1low": { coverage: 50, far: 100, slope: 1.25, absHeight: 10, northStart: 5, northSlope: 1.25, adjStart: null, adjSlope: null },
@@ -713,6 +719,7 @@
         metalness: 0.05,
         roughness: 0.7,
         side: THREE.DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2,
         clippingPlanes: clips
       });
       const n = nLocal.clone().normalize();
@@ -733,7 +740,7 @@
       const clips = r.planes.map(function (pl) { return mkPlane(pl.n, pl.p); });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, H, d),
-        new THREE.MeshStandardMaterial({ color: r.color, clippingPlanes: clips, side: THREE.DoubleSide })
+        new THREE.MeshStandardMaterial({ color: r.color, clippingPlanes: clips, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 })
       );
       mesh.position.set(cx, cy, cz);
       group.add(mesh);
@@ -1247,7 +1254,7 @@
       currentFloors.forEach(function (f) {
         const y = fl1 + f.floor * floorH;
         f.rects.forEach(function (r) {
-          const e = 0.03;
+          const e = 0.05;
           const x0 = r.x0 - e, x1 = r.x1 + e, z0 = r.z0 - e, z1 = r.z1 + e;
           const pts = [
             new THREE.Vector3(x0, y, z0), new THREE.Vector3(x1, y, z0),
